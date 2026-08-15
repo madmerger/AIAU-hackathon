@@ -119,6 +119,7 @@ tbody tr:hover { background: #24323f; }
 .chip.gold { background: #2c2718; border-color: #6b5a33; color: var(--accent); }
 
 .feed { display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow: auto; }
+.feed-stack { display: flex; flex-direction: column; gap: 14px; }
 .feed-item { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); }
 .feed-item a { color: var(--text); text-decoration: none; font-size: 12.5px; }
 .feed-item a:hover { color: var(--accent); }

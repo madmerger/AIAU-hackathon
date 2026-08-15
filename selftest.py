@@ -90,6 +90,8 @@ def main() -> None:
     assert payload["totals"]["merge_rate"] == 33.3
     assert payload["totals"]["users"] == 7
     assert payload["totals"]["active_users"] == 1
+    assert [entry["session_id"] for entry in payload["top_sessions"]] == ["s1", "s2"]
+    assert [entry["acus"] for entry in payload["top_sessions"]] == [10.0, 4.0]
     assert payload["totals"]["active_orgs"] == 2
     assert [entry["name"] for entry in payload["orgs"][:2]] == ["Team A", "Team B"]
     assert payload["idle_orgs"][0]["name"] == "Team C"
@@ -108,6 +110,7 @@ def main() -> None:
     assert payload["totals"]["active_orgs"] == 3
     assert payload["totals"]["users"] == 7
     assert payload["totals"]["active_users"] == 2
+    assert [entry["session_id"] for entry in payload["top_sessions"]] == ["s1", "s2", "s3"]
     current = {row["hour"]: row["acus"] for row in payload["hourly"]}
     assert current[hour_of(NOW)] == 17.0, current  # 15 delta on s1 + 2 from the new session
     assert current[hour_of(NOW - 2 * HOUR)] == 10.0, current

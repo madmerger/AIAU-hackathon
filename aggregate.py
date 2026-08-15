@@ -11,6 +11,7 @@ from config import Config
 
 HEATMAP_ORGS = 12
 RECENT_SESSIONS = 25
+TOP_SESSIONS = 25
 ERROR_STATUSES = ("error",)
 ACTIVE_STATUSES = ("running", "resuming", "claimed", "new")
 
@@ -205,6 +206,33 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             (RECENT_SESSIONS,),
         )
     ]
+    top_sessions = [
+        {
+            "session_id": row["session_id"],
+            "org_name": orgs.get(row["org_id"], {}).get("name", row["org_id"]),
+            "title": row["title"],
+            "url": row["url"],
+            "status": row["status"],
+            "status_detail": row["status_detail"],
+            "devin_mode": row["devin_mode"],
+            "acus": round(float(row["acus"]), 2),
+            "updated_at": int(row["updated_at"] or 0),
+            "prs_merged": int(row["prs_merged"] or 0),
+        }
+        for row in connection.execute(
+            """
+            SELECT s.session_id, s.org_id, s.title, s.url, s.status, s.status_detail,
+                   s.devin_mode, s.acus, s.updated_at,
+                   (SELECT COUNT(*) FROM prs WHERE prs.session_id = s.session_id
+                     AND prs.merged_hour IS NOT NULL) AS prs_merged
+            FROM sessions s
+            WHERE s.acus > 0
+            ORDER BY s.acus DESC
+            LIMIT ?
+            """,
+            (TOP_SESSIONS,),
+        )
+    ]
 
     heatmap_orgs = [entry for entry in org_rows if entry["acus"] > 0][:HEATMAP_ORGS]
     return {
@@ -247,4 +275,5 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             "orgs": [{"name": entry["name"], "values": entry["hourly_acus"]} for entry in heatmap_orgs],
         },
         "recent_sessions": recent_sessions,
+        "top_sessions": top_sessions,
     }

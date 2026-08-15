@@ -264,8 +264,8 @@ function renderIdleOrgs(data) {
     .join("");
 }
 
-function renderFeed(data) {
-  document.getElementById("feed").innerHTML = data.recent_sessions.map((session) => `
+function renderSessionFeed(elementId, sessions) {
+  document.getElementById(elementId).innerHTML = sessions.map((session) => `
     <div class="feed-item">
       <a href="${session.url}" target="_blank" rel="noreferrer">
         <span class="dot ${session.status}"></span>${escapeHtml(session.title || "(無題)")}
@@ -278,6 +278,11 @@ function renderFeed(data) {
         <span>${relativeLabel(session.updated_at)}</span>
       </div>
     </div>`).join("");
+}
+
+function renderFeed(data) {
+  renderSessionFeed("feed", data.recent_sessions);
+  renderSessionFeed("top-feed", data.top_sessions);
 }
 
 function escapeHtml(value) {
