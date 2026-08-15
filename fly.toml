@@ -1,0 +1,25 @@
+app = "aiau-hackathon-dashboard"
+primary_region = "nrt"
+
+[build]
+
+[env]
+  PORT = "8080"
+  DASHBOARD_DB = "/data/dashboard.db"
+  HACKATHON_START = "2026-08-14 12:00"
+  HACKATHON_END = "2026-08-15 18:00"
+
+[[mounts]]
+  source = "dashboard_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
