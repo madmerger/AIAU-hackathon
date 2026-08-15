@@ -44,6 +44,7 @@ def session(
     acus: float,
     prs: list[tuple[str, str]],
     user_id: str | None = None,
+    origin: str = "webapp",
 ) -> dict[str, Any]:
     return {
         "session_id": session_id,
@@ -54,7 +55,7 @@ def session(
         "status": "running",
         "status_detail": "working",
         "devin_mode": "normal",
-        "origin": "webapp",
+        "origin": origin,
         "created_at": created_at,
         "updated_at": created_at + 60,
         "acus_consumed": acus,
@@ -77,7 +78,7 @@ def main() -> None:
     connection = store.connect(config.db_path)
     sessions = [
         session("s1", "org-a", NOW - 2 * HOUR, 10.0, [("pr1", "merged"), ("pr2", "open")], "shared-1"),
-        session("s2", "org-b", NOW - 1 * HOUR, 4.0, [("pr3", "open")], "shared-1"),
+        session("s2", "org-b", NOW - 1 * HOUR, 4.0, [("pr3", "open")], "shared-1", "cli"),
     ]
     client = FakeClient(sessions)
     collector = Collector(client, connection)  # type: ignore[arg-type]
@@ -92,6 +93,12 @@ def main() -> None:
     assert payload["totals"]["active_users"] == 1
     assert [entry["session_id"] for entry in payload["top_sessions"]] == ["s1", "s2"]
     assert [entry["acus"] for entry in payload["top_sessions"]] == [10.0, 4.0]
+    assert [(entry["origin"], entry["acus"]) for entry in payload["origins"][:2]] == [
+        ("webapp", 10.0),
+        ("cli", 4.0),
+    ]
+    assert {entry["origin"] for entry in payload["origins"]} >= {"webapp", "desktop", "cli"}
+    assert next(entry for entry in payload["origins"] if entry["origin"] == "desktop")["acus"] == 0.0
     assert payload["totals"]["active_orgs"] == 2
     assert [entry["name"] for entry in payload["orgs"][:2]] == ["Team A", "Team B"]
     assert payload["idle_orgs"][0]["name"] == "Team C"

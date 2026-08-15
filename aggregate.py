@@ -14,6 +14,19 @@ RECENT_SESSIONS = 25
 TOP_SESSIONS = 25
 ERROR_STATUSES = ("error",)
 ACTIVE_STATUSES = ("running", "resuming", "claimed", "new")
+ORIGIN_LABELS = {
+    "webapp": "Cloud (Web)",
+    "desktop": "Devin Desktop",
+    "cli": "Devin CLI",
+    "api": "API",
+    "slack": "Slack",
+    "teams": "Teams",
+    "linear": "Linear",
+    "jira": "Jira",
+    "automation": "Automation",
+    "code_scan": "Code Scan",
+    "other": "その他",
+}
 
 
 def _rate(numerator: float, denominator: float) -> float | None:
@@ -95,6 +108,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
     hourly_sessions = [0] * bucket_count
     statuses: dict[str, int] = {}
     modes: dict[str, int] = {}
+    origin_totals: dict[str, dict[str, Any]] = {}
     active_users_by_org: dict[str, set[str]] = {}
     active_user_ids: set[str] = set()
     total_acus = 0.0
@@ -102,7 +116,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
     active_sessions = 0
     error_sessions = 0
     for row in connection.execute(
-        "SELECT org_id, user_id, status, devin_mode, created_at, updated_at, acus FROM sessions"
+        "SELECT org_id, user_id, status, devin_mode, origin, created_at, updated_at, acus FROM sessions"
     ):
         entry = org_entry(row["org_id"])
         entry["sessions"] += 1
@@ -120,6 +134,13 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         statuses[status] = statuses.get(status, 0) + 1
         mode = row["devin_mode"] or "unknown"
         modes[mode] = modes.get(mode, 0) + 1
+        origin = row["origin"] if row["origin"] in ORIGIN_LABELS else "other"
+        origin_entry = origin_totals.setdefault(
+            origin,
+            {"origin": origin, "label": ORIGIN_LABELS[origin], "sessions": 0, "acus": 0.0},
+        )
+        origin_entry["sessions"] += 1
+        origin_entry["acus"] += float(row["acus"])
         total_acus += float(row["acus"])
         total_sessions += 1
         active_sessions += 1 if status in ACTIVE_STATUSES else 0
@@ -168,6 +189,22 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         connection.execute("SELECT COUNT(DISTINCT user_id) AS count FROM org_users").fetchone()["count"]
     )
     total_active_users = len(active_user_ids)
+    for origin in ("webapp", "desktop", "cli"):
+        origin_totals.setdefault(
+            origin,
+            {"origin": origin, "label": ORIGIN_LABELS[origin], "sessions": 0, "acus": 0.0},
+        )
+    origins = sorted(
+        (
+            {
+                **entry,
+                "acus": round(float(entry["acus"]), 2),
+            }
+            for entry in origin_totals.values()
+        ),
+        key=lambda entry: entry["acus"],
+        reverse=True,
+    )
     active_orgs = [entry for entry in org_rows if entry["sessions"] > 0]
     idle_orgs = [
         {"org_id": entry["org_id"], "name": entry["name"], "user_count": entry["user_count"]}
@@ -271,6 +308,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         "idle_orgs": idle_orgs,
         "statuses": statuses,
         "modes": modes,
+        "origins": origins,
         "heatmap": {
             "orgs": [{"name": entry["name"], "values": entry["hourly_acus"]} for entry in heatmap_orgs],
         },

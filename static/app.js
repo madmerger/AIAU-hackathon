@@ -212,6 +212,9 @@ function renderDonuts(data) {
   };
   donut("chart-status", data.statuses);
   donut("chart-mode", data.modes);
+  donut("chart-origin", Object.fromEntries(
+    data.origins.map((origin) => [`${origin.label} (${origin.sessions})`, origin.acus]),
+  ));
 }
 
 function sparkline(values) {
