@@ -95,6 +95,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
     statuses: dict[str, int] = {}
     modes: dict[str, int] = {}
     active_users_by_org: dict[str, set[str]] = {}
+    active_user_ids: set[str] = set()
     total_acus = 0.0
     total_sessions = 0
     active_sessions = 0
@@ -110,6 +111,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             entry["last_activity"] = updated_at
         if row["user_id"]:
             active_users_by_org.setdefault(row["org_id"], set()).add(row["user_id"])
+            active_user_ids.add(row["user_id"])
         position = hour_index.get(hour_of(int(row["created_at"] or now)))
         if position is not None:
             hourly_sessions[position] += 1
@@ -161,8 +163,10 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
 
     total_prs_created = sum(entry["prs_created"] for entry in org_rows)
     total_prs_merged = sum(entry["prs_merged"] for entry in org_rows)
-    total_users = sum(entry["user_count"] for entry in org_rows)
-    total_active_users = sum(entry["active_users"] for entry in org_rows)
+    total_users = int(
+        connection.execute("SELECT COUNT(DISTINCT user_id) AS count FROM org_users").fetchone()["count"]
+    )
+    total_active_users = len(active_user_ids)
     active_orgs = [entry for entry in org_rows if entry["sessions"] > 0]
     idle_orgs = [
         {"org_id": entry["org_id"], "name": entry["name"], "user_count": entry["user_count"]}

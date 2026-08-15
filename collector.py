@@ -84,7 +84,17 @@ class Collector:
         for org in self._client.list_organizations():
             org_id = org["org_id"]
             try:
-                user_count = len(self._client.list_org_users(org_id))
+                users = self._client.list_org_users(org_id)
+                self._connection.execute("DELETE FROM org_users WHERE org_id = ?", (org_id,))
+                self._connection.executemany(
+                    "INSERT OR IGNORE INTO org_users (org_id, user_id) VALUES (?, ?)",
+                    [
+                        (org_id, user["user_id"])
+                        for user in users
+                        if user.get("user_id")
+                    ],
+                )
+                user_count = len(users)
             except DevinApiError as error:
                 logger.warning("could not list users of %s: %s", org_id, error)
                 row = self._connection.execute(

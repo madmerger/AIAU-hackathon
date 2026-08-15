@@ -26,18 +26,29 @@ class FakeClient:
         ]
 
     def list_org_users(self, org_id: str) -> list[dict[str, Any]]:
-        counts = {"org-a": 3, "org-b": 2, "org-c": 4}
-        return [{"user_id": f"{org_id}-user-{index}"} for index in range(counts[org_id])]
+        users = {
+            "org-a": ["shared-1", "org-a-user-1", "org-a-user-2"],
+            "org-b": ["shared-1", "org-b-user-1"],
+            "org-c": ["shared-1", "org-c-user-1", "org-c-user-2", "org-c-user-3"],
+        }
+        return [{"user_id": user_id} for user_id in users[org_id]]
 
     def list_sessions(self) -> list[dict[str, Any]]:
         return self.sessions
 
 
-def session(session_id: str, org_id: str, created_at: int, acus: float, prs: list[tuple[str, str]]) -> dict[str, Any]:
+def session(
+    session_id: str,
+    org_id: str,
+    created_at: int,
+    acus: float,
+    prs: list[tuple[str, str]],
+    user_id: str | None = None,
+) -> dict[str, Any]:
     return {
         "session_id": session_id,
         "org_id": org_id,
-        "user_id": f"{org_id}-user-0",
+        "user_id": user_id or f"{org_id}-user-0",
         "title": f"session {session_id}",
         "url": f"https://example.com/{session_id}",
         "status": "running",
@@ -65,8 +76,8 @@ def main() -> None:
     )
     connection = store.connect(config.db_path)
     sessions = [
-        session("s1", "org-a", NOW - 2 * HOUR, 10.0, [("pr1", "merged"), ("pr2", "open")]),
-        session("s2", "org-b", NOW - 1 * HOUR, 4.0, [("pr3", "open")]),
+        session("s1", "org-a", NOW - 2 * HOUR, 10.0, [("pr1", "merged"), ("pr2", "open")], "shared-1"),
+        session("s2", "org-b", NOW - 1 * HOUR, 4.0, [("pr3", "open")], "shared-1"),
     ]
     client = FakeClient(sessions)
     collector = Collector(client, connection)  # type: ignore[arg-type]
@@ -77,8 +88,8 @@ def main() -> None:
     assert payload["totals"]["prs_created"] == 3
     assert payload["totals"]["prs_merged"] == 1
     assert payload["totals"]["merge_rate"] == 33.3
-    assert payload["totals"]["users"] == 9
-    assert payload["totals"]["active_users"] == 2
+    assert payload["totals"]["users"] == 7
+    assert payload["totals"]["active_users"] == 1
     assert payload["totals"]["active_orgs"] == 2
     assert [entry["name"] for entry in payload["orgs"][:2]] == ["Team A", "Team B"]
     assert payload["idle_orgs"][0]["name"] == "Team C"
@@ -89,12 +100,14 @@ def main() -> None:
 
     sessions[0]["acus_consumed"] = 25.0
     sessions[0]["pull_requests"][1]["pr_state"] = "merged"
-    sessions.append(session("s3", "org-c", NOW, 2.0, []))
+    sessions.append(session("s3", "org-c", NOW, 2.0, [], "shared-2"))
     collector.poll()
     payload = build_payload(connection, config, {"last_poll_at": NOW, "last_error": None, "poll_interval": 60})
     assert payload["totals"]["acus"] == 31.0, payload["totals"]
     assert payload["totals"]["prs_merged"] == 2
     assert payload["totals"]["active_orgs"] == 3
+    assert payload["totals"]["users"] == 7
+    assert payload["totals"]["active_users"] == 2
     current = {row["hour"]: row["acus"] for row in payload["hourly"]}
     assert current[hour_of(NOW)] == 17.0, current  # 15 delta on s1 + 2 from the new session
     assert current[hour_of(NOW - 2 * HOUR)] == 10.0, current

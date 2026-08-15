@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS orgs (
     created_at INTEGER,
     updated_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS org_users (
+    org_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    PRIMARY KEY (org_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY,
     org_id TEXT,
@@ -50,6 +55,7 @@ CREATE TABLE IF NOT EXISTS polls (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_org ON sessions(org_id);
 CREATE INDEX IF NOT EXISTS idx_prs_org ON prs(org_id);
+CREATE INDEX IF NOT EXISTS idx_org_users_user ON org_users(user_id);
 """
 
 
