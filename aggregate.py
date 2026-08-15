@@ -40,7 +40,7 @@ def _hours_axis(connection: sqlite3.Connection, config: Config, now: int) -> lis
     earliest = row["first_hour"] if row and row["first_hour"] is not None else hour_of(now)
     start = hour_of(config.hackathon_start) if config.hackathon_start else int(earliest)
     start = min(start, int(earliest))
-    end = hour_of(min(now, config.hackathon_end) if config.hackathon_end else now)
+    end = hour_of(now)
     hours = list(range(start, end + HOUR, HOUR))
     return hours[-config.max_hours :]
 

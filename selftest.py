@@ -103,6 +103,24 @@ def main() -> None:
     assert [entry["name"] for entry in payload["orgs"][:2]] == ["Team A", "Team B"]
     assert payload["idle_orgs"][0]["name"] == "Team C"
 
+    past_end_config = Config(
+        api_base=config.api_base,
+        api_key=config.api_key,
+        db_path=config.db_path,
+        port=config.port,
+        poll_interval=config.poll_interval,
+        org_refresh_interval=config.org_refresh_interval,
+        hackathon_start=config.hackathon_start,
+        hackathon_end=NOW - HOUR,
+        max_hours=config.max_hours,
+    )
+    past_end_payload = build_payload(
+        connection,
+        past_end_config,
+        {"last_poll_at": NOW, "last_error": None, "poll_interval": 60},
+    )
+    assert past_end_payload["hours"][-1] == hour_of(NOW), past_end_payload["hours"]
+
     backfilled = {row["hour"]: row["acus"] for row in payload["hourly"]}
     assert backfilled[hour_of(NOW - 2 * HOUR)] == 10.0, backfilled
     assert backfilled[hour_of(NOW - HOUR)] == 4.0, backfilled
