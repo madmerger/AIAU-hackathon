@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AIAU ハッカソン モニタリングダッシュボード</title>
+<link rel="icon" href="/static/logo.png" />
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <img src="/static/logo.png" alt="AIAU" />
+    <div>
+      <h1><span class="mark">AIAU</span>ハッカソン モニタリングダッシュボード</h1>
+      <div class="sub" id="window-label">読み込み中…</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="countdown">
+      <div class="label">残り時間</div>
+      <div class="value" id="countdown">-</div>
+    </div>
+    <div class="countdown">
+      <div class="label">最終更新</div>
+      <div class="value" id="updated">-</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="block">
+    <h2 class="block-title">エンタープライズ全体</h2>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="charts">
+      <div class="card">
+        <h2>全体 ACU 利用量（棒: 1時間ごと / 線: 累積）</h2>
+        <canvas id="chart-acu" height="120"></canvas>
+      </div>
+      <div class="card">
+        <h2>全体 PR マージ数（棒: 1時間ごと / 線: 累積）</h2>
+        <canvas id="chart-pr" height="120"></canvas>
+      </div>
+      <div class="card">
+        <h2>全体 PR マージ率（%）</h2>
+        <canvas id="chart-rate" height="120"></canvas>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="card side-wide grow">
+        <h2>直近セッション（全体）</h2>
+        <div id="feed" class="feed"></div>
+      </div>
+      <div class="side">
+        <div class="card">
+          <h2>セッション状態</h2>
+          <canvas id="chart-status" height="150"></canvas>
+        </div>
+        <div class="card">
+          <h2>Devin モード</h2>
+          <canvas id="chart-mode" height="150"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2 class="block-title">Org 別</h2>
+
+    <div class="split">
+      <div class="card grow">
+        <h2>Org 別ランキング（ACU 降順）</h2>
+        <div class="table-wrap">
+          <table id="org-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Org</th><th class="num">ユーザー</th><th class="num">ACU</th>
+                <th class="num">ACU/人</th><th class="num">セッション</th><th class="num">PR作成</th>
+                <th class="num">PRマージ</th><th class="num">マージ率</th><th>ACU推移</th><th class="num">最終活動</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="side">
+        <div class="card">
+          <h2>未着手 / 停滞 Org</h2>
+          <div id="idle-orgs" class="chips"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="charts">
+      <div class="card">
+        <h2>Org 別 累積 ACU（上位8 + その他）</h2>
+        <canvas id="chart-orgs" height="120"></canvas>
+      </div>
+      <div class="card">
+        <h2>Org × 時間 ACU ヒートマップ</h2>
+        <div class="table-wrap" id="heatmap"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+
+<script src="/static/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
