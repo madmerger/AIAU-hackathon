@@ -151,6 +151,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
     active_users_by_org: dict[str, set[str]] = {}
     active_user_ids: set[str] = set()
     total_acus = 0.0
+    total_session_acus = 0.0
     total_sessions = 0
     active_sessions = 0
     error_sessions = 0
@@ -181,7 +182,9 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         )
         origin_entry["sessions"] += 1
         origin_entry["acus"] += float(row["acus"])
-        total_acus += float(row["acus"])
+        session_acus = float(row["acus"])
+        total_acus += session_acus
+        total_session_acus += session_acus
         total_sessions += 1
         active_sessions += 1 if status in ACTIVE_STATUSES else 0
         error_sessions += 1 if status in ERROR_STATUSES else 0
@@ -368,7 +371,9 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             "users": total_users,
             "active_users": total_active_users,
             "activation_rate": _rate(total_active_users, total_users),
-            "acus_per_session": round(total_acus / total_sessions, 2) if total_sessions else 0,
+            "acus_per_session": (
+                round(total_session_acus / total_sessions, 2) if total_sessions else 0
+            ),
             "acus_per_merged_pr": round(total_acus / total_prs_merged, 2) if total_prs_merged else None,
             "acus_source": product_source,
         },

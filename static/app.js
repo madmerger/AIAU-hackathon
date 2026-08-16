@@ -53,7 +53,7 @@ function renderKpis(data) {
   const pace = data.pace;
   const mergeTone = t.merge_rate === null ? "" : t.merge_rate >= 70 ? "good" : t.merge_rate >= 40 ? "warn" : "bad";
   document.getElementById("kpis").innerHTML = [
-    kpi("総 ACU 利用量", fmt(t.acus), `1セッション平均 ${fmt(t.acus_per_session)} ACU`),
+    kpi("総 ACU 利用量", fmt(t.acus), `1セッション平均 ${fmt(t.acus_per_session)} ACU（セッションACU基準）`),
     kpi("PR マージ数", fmt(t.prs_merged), `作成 ${fmt(t.prs_created)} / オープン ${fmt(t.prs_open)}`),
     kpi("PR マージ率", t.merge_rate === null ? "-" : fmt(t.merge_rate, "%"), "マージ済 / 作成", mergeTone),
     kpi("直近1時間の ACU", fmt(pace.acus_last_full_hour), `今の時間帯 ${fmt(pace.acus_current_hour)}`),
@@ -63,7 +63,7 @@ function renderKpis(data) {
     kpi("参加 Org", `${fmt(t.active_orgs)} / ${fmt(t.orgs)}`, "セッション実行済 / 全Org"),
     kpi("アクティブユーザー", `${fmt(t.active_users)} / ${fmt(t.users)}`,
       `参加率 ${t.activation_rate === null ? "-" : fmt(t.activation_rate, "%")}`),
-    kpi("マージPRあたり ACU", fmt(t.acus_per_merged_pr), "低いほど効率的"),
+    kpi("マージPRあたり ACU", fmt(t.acus_per_merged_pr), "公式Consumption ACU基準 / 低いほど効率的"),
   ].join("");
 }
 

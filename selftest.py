@@ -131,6 +131,7 @@ def main() -> None:
         connection, config, {"last_poll_at": NOW, "last_error": None, "poll_interval": 60}
     )
     assert consumption_payload["totals"]["acus"] == 34.0
+    assert consumption_payload["totals"]["acus_per_session"] == 7.0
     assert consumption_payload["product_acus"] == {
         "devin": 14.0,
         "cascade": 20.0,
