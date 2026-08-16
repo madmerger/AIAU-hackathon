@@ -232,19 +232,23 @@ function renderOrgTable(data) {
   const body = document.querySelector("#org-table tbody");
   const header = document.querySelector("#org-table thead tr");
   if (!header.querySelector(".product-header")) {
-    header.insertAdjacentHTML("beforeend", '<th class="product-header">ACU内訳</th>');
+    const acuHeader = Array.from(header.children).find((cell) => cell.textContent.trim() === "ACU");
+    acuHeader.insertAdjacentHTML("afterend", '<th class="product-header">ACU内訳</th>');
   }
   if (!header.querySelector(".summary-header")) {
     header.insertAdjacentHTML("beforeend", '<th class="summary-header">制作内容</th>');
   }
+  const productShortLabels = { devin: "Devin", cascade: "Desktop", terminal: "CLI", review: "Review" };
   body.innerHTML = data.orgs.map((org) => `
     <tr class="rank-${org.rank}">
       <td class="num">${org.rank}</td>
       <td>${escapeHtml(org.name)}</td>
       <td class="num">${fmt(org.user_count)}${org.active_users ? `<span style="color:#93a2b0"> (稼働 ${org.active_users})</span>` : ""}</td>
       <td class="num">${fmt(org.acus)}</td>
-      <td class="product-breakdown">${Object.entries(org.acus_by_product || {}).map(([product, value]) =>
-        `${escapeHtml((data.product_labels || {})[product] || product)} ${fmt(value)}`).join(" / ")}</td>
+      <td class="product-breakdown">${Object.entries(org.acus_by_product || {})
+        .filter(([, value]) => Number(value) > 0)
+        .map(([product, value]) => `${productShortLabels[product] || product} ${fmt(value)}`)
+        .join(" / ") || "-"}</td>
       <td class="num">${fmt(org.acus_per_user)}</td>
       <td class="num">${fmt(org.sessions)}</td>
       <td class="num">${fmt(org.prs_created)}</td>
