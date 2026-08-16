@@ -215,6 +215,12 @@ function renderDonuts(data) {
   donut("chart-origin", Object.fromEntries(
     data.origins.map((origin) => [`${origin.label} (${origin.sessions})`, origin.acus]),
   ));
+  donut("chart-product", Object.fromEntries(
+    Object.entries(data.product_labels || {}).map(([product, label]) => [
+      label,
+      (data.product_acus || {})[product] || 0,
+    ]),
+  ));
 }
 
 function sparkline(values) {
@@ -225,6 +231,9 @@ function sparkline(values) {
 function renderOrgTable(data) {
   const body = document.querySelector("#org-table tbody");
   const header = document.querySelector("#org-table thead tr");
+  if (!header.querySelector(".product-header")) {
+    header.insertAdjacentHTML("beforeend", '<th class="product-header">ACU内訳</th>');
+  }
   if (!header.querySelector(".summary-header")) {
     header.insertAdjacentHTML("beforeend", '<th class="summary-header">制作内容</th>');
   }
@@ -234,6 +243,8 @@ function renderOrgTable(data) {
       <td>${escapeHtml(org.name)}</td>
       <td class="num">${fmt(org.user_count)}${org.active_users ? `<span style="color:#93a2b0"> (稼働 ${org.active_users})</span>` : ""}</td>
       <td class="num">${fmt(org.acus)}</td>
+      <td class="product-breakdown">${Object.entries(org.acus_by_product || {}).map(([product, value]) =>
+        `${escapeHtml((data.product_labels || {})[product] || product)} ${fmt(value)}`).join(" / ")}</td>
       <td class="num">${fmt(org.acus_per_user)}</td>
       <td class="num">${fmt(org.sessions)}</td>
       <td class="num">${fmt(org.prs_created)}</td>

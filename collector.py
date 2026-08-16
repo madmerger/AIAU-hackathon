@@ -39,17 +39,21 @@ class Collector:
         connection: sqlite3.Connection,
         org_refresh_interval: int = 600,
         summary_refresh_interval: int = 600,
+        consumption_refresh_interval: int = 300,
         summary_api_key: str | None = None,
     ) -> None:
         self._client = client
         self._connection = connection
         self._org_refresh_interval = org_refresh_interval
         self._summary_refresh_interval = max(600, summary_refresh_interval)
+        self._consumption_refresh_interval = max(300, consumption_refresh_interval)
         self._summary_api_key = summary_api_key
         self._last_summary_refresh = 0.0
         self._summary_thread: threading.Thread | None = None
+        self._consumption_thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._last_org_refresh = 0.0
+        self._last_consumption_refresh = 0.0
         self.last_poll_at: int | None = None
         self.last_error: str | None = None
 
@@ -70,6 +74,7 @@ class Collector:
                 )
                 self._connection.commit()
                 self._schedule_summary_refresh(now)
+                self._schedule_consumption_refresh(now)
                 self.last_poll_at = now
                 self.last_error = None
             except DevinApiError as error:
@@ -157,6 +162,112 @@ class Collector:
                     (org_id, summary, titles_hash, int(time.time())),
                 )
                 self._connection.commit()
+
+    def _schedule_consumption_refresh(self, now: int) -> None:
+        if not hasattr(self._client, "daily_consumption"):
+            return
+        if now - self._last_consumption_refresh < self._consumption_refresh_interval:
+            return
+        if self._consumption_thread and self._consumption_thread.is_alive():
+            return
+        self._last_consumption_refresh = now
+        self._consumption_thread = threading.Thread(
+            target=self._refresh_consumption,
+            name="consumption-refresh",
+            daemon=True,
+        )
+        self._consumption_thread.start()
+
+    @staticmethod
+    def _consumption_values(payload: dict[str, Any]) -> tuple[float, dict[str, float]]:
+        products = {"devin": 0.0, "cascade": 0.0, "terminal": 0.0, "review": 0.0}
+        for day in payload.get("consumption_by_date") or []:
+            for product in products:
+                products[product] += float((day.get("acus_by_product") or {}).get(product) or 0.0)
+        total = payload.get("total_acus")
+        if total is None:
+            total = sum(products.values())
+        return float(total or 0.0), products
+
+    def _refresh_consumption(self) -> None:
+        errors: list[str] = []
+        enterprise: tuple[float, dict[str, float]] | None = None
+        try:
+            enterprise = self._consumption_values(self._client.daily_consumption())
+        except DevinApiError as error:
+            errors.append(f"enterprise consumption: {error}")
+
+        with self._lock:
+            org_ids = [
+                row["org_id"]
+                for row in self._connection.execute("SELECT org_id FROM orgs")
+            ]
+        for org_id in org_ids:
+            try:
+                total, products = self._consumption_values(
+                    self._client.daily_org_consumption(org_id)
+                )
+            except DevinApiError as error:
+                errors.append(f"{org_id} consumption: {error}")
+                continue
+            with self._lock:
+                self._connection.execute(
+                    """
+                    INSERT INTO org_consumption (
+                        org_id, total_acus, devin_acus, cascade_acus,
+                        terminal_acus, review_acus, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(org_id) DO UPDATE SET
+                        total_acus = excluded.total_acus,
+                        devin_acus = excluded.devin_acus,
+                        cascade_acus = excluded.cascade_acus,
+                        terminal_acus = excluded.terminal_acus,
+                        review_acus = excluded.review_acus,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        org_id,
+                        total,
+                        products["devin"],
+                        products["cascade"],
+                        products["terminal"],
+                        products["review"],
+                        int(time.time()),
+                    ),
+                )
+                self._connection.commit()
+
+        if enterprise is not None:
+            total, products = enterprise
+            with self._lock:
+                self._connection.execute(
+                    """
+                    INSERT INTO enterprise_consumption (
+                        id, total_acus, devin_acus, cascade_acus,
+                        terminal_acus, review_acus, updated_at
+                    ) VALUES (1, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        total_acus = excluded.total_acus,
+                        devin_acus = excluded.devin_acus,
+                        cascade_acus = excluded.cascade_acus,
+                        terminal_acus = excluded.terminal_acus,
+                        review_acus = excluded.review_acus,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        total,
+                        products["devin"],
+                        products["cascade"],
+                        products["terminal"],
+                        products["review"],
+                        int(time.time()),
+                    ),
+                )
+                self._connection.commit()
+        if errors:
+            with self._lock:
+                self.last_error = "; ".join(errors)
+            logger.warning("consumption refresh had failures: %s", "; ".join(errors))
 
     def _is_first_poll(self) -> bool:
         row = self._connection.execute("SELECT COUNT(*) AS n FROM polls WHERE error IS NULL").fetchone()

@@ -72,6 +72,7 @@ def main() -> None:
         poll_interval=60,
         org_refresh_interval=600,
         summary_refresh_interval=600,
+        consumption_refresh_interval=300,
         hackathon_start=NOW - 3 * HOUR,
         hackathon_end=NOW + 2 * HOUR,
         max_hours=72,
@@ -109,6 +110,43 @@ def main() -> None:
     assert payload["totals"]["active_orgs"] == 2
     assert [entry["name"] for entry in payload["orgs"][:2]] == ["Team A", "Team B"]
 
+    connection.execute(
+        """
+        INSERT INTO org_consumption (
+            org_id, total_acus, devin_acus, cascade_acus, terminal_acus, review_acus, updated_at
+        ) VALUES ('org-a', 30.0, 10.0, 20.0, 0.0, 0.0, ?)
+        """,
+        (NOW,),
+    )
+    connection.execute(
+        """
+        INSERT INTO enterprise_consumption (
+            id, total_acus, devin_acus, cascade_acus, terminal_acus, review_acus, updated_at
+        ) VALUES (1, 34.0, 14.0, 20.0, 0.0, 0.0, ?)
+        """,
+        (NOW,),
+    )
+    connection.commit()
+    consumption_payload = build_payload(
+        connection, config, {"last_poll_at": NOW, "last_error": None, "poll_interval": 60}
+    )
+    assert consumption_payload["totals"]["acus"] == 34.0
+    assert consumption_payload["product_acus"] == {
+        "devin": 14.0,
+        "cascade": 20.0,
+        "terminal": 0.0,
+        "review": 0.0,
+    }
+    assert consumption_payload["orgs"][0]["name"] == "Team A"
+    assert consumption_payload["orgs"][0]["acus"] == 30.0
+    assert consumption_payload["orgs"][0]["acus_by_product"]["cascade"] == 20.0
+    team_b = next(entry for entry in consumption_payload["orgs"] if entry["name"] == "Team B")
+    assert team_b["acus"] == 4.0
+    assert team_b["acus_source"] == "sessions"
+    connection.execute("DELETE FROM org_consumption")
+    connection.execute("DELETE FROM enterprise_consumption")
+    connection.commit()
+
     past_end_config = Config(
         api_base=config.api_base,
         api_key=config.api_key,
@@ -117,6 +155,7 @@ def main() -> None:
         poll_interval=config.poll_interval,
         org_refresh_interval=config.org_refresh_interval,
         summary_refresh_interval=config.summary_refresh_interval,
+        consumption_refresh_interval=config.consumption_refresh_interval,
         hackathon_start=config.hackathon_start,
         hackathon_end=NOW - HOUR,
         max_hours=config.max_hours,

@@ -27,6 +27,12 @@ ORIGIN_LABELS = {
     "code_scan": "Code Scan",
     "other": "その他",
 }
+PRODUCT_LABELS = {
+    "devin": "Devin セッション",
+    "cascade": "Devin Desktop",
+    "terminal": "Devin CLI",
+    "review": "Devin Review",
+}
 
 
 def _rate(numerator: float, denominator: float) -> float | None:
@@ -50,6 +56,23 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
     hours = _hours_axis(connection, config, now)
     hour_index = {hour: position for position, hour in enumerate(hours)}
     bucket_count = len(hours)
+    consumption_rows = {
+        row["org_id"]: row
+        for row in connection.execute(
+            """
+            SELECT org_id, total_acus, devin_acus, cascade_acus,
+                   terminal_acus, review_acus, updated_at
+            FROM org_consumption
+            """
+        )
+    }
+    enterprise_row = connection.execute(
+        """
+        SELECT total_acus, devin_acus, cascade_acus, terminal_acus,
+               review_acus, updated_at
+        FROM enterprise_consumption WHERE id = 1
+        """
+    ).fetchone()
 
     orgs = {
         row["org_id"]: {
@@ -58,6 +81,10 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             "user_count": int(row["user_count"]),
             "summary": row["summary"] or "",
             "acus": 0.0,
+            "session_acus": 0.0,
+            "acus_by_product": {product: 0.0 for product in PRODUCT_LABELS},
+            "acus_source": "sessions",
+            "consumption_updated_at": None,
             "sessions": 0,
             "active_users": 0,
             "prs_created": 0,
@@ -82,6 +109,10 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
                 "user_count": 0,
                 "summary": "",
                 "acus": 0.0,
+                "session_acus": 0.0,
+                "acus_by_product": {product: 0.0 for product in PRODUCT_LABELS},
+                "acus_source": "sessions",
+                "consumption_updated_at": None,
                 "sessions": 0,
                 "active_users": 0,
                 "prs_created": 0,
@@ -129,6 +160,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         entry = org_entry(row["org_id"])
         entry["sessions"] += 1
         entry["acus"] += float(row["acus"])
+        entry["session_acus"] += float(row["acus"])
         updated_at = int(row["updated_at"] or 0)
         if entry["last_activity"] is None or updated_at > entry["last_activity"]:
             entry["last_activity"] = updated_at
@@ -156,6 +188,38 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
 
     for org_id, users in active_users_by_org.items():
         org_entry(org_id)["active_users"] = len(users)
+
+    for org_id, entry in orgs.items():
+        consumption = consumption_rows.get(org_id)
+        if consumption is None:
+            entry["acus_by_product"]["devin"] = entry["session_acus"]
+            continue
+        entry["acus"] = float(consumption["total_acus"])
+        entry["acus_by_product"] = {
+            "devin": float(consumption["devin_acus"]),
+            "cascade": float(consumption["cascade_acus"]),
+            "terminal": float(consumption["terminal_acus"]),
+            "review": float(consumption["review_acus"]),
+        }
+        entry["acus_source"] = "consumption"
+        entry["consumption_updated_at"] = int(consumption["updated_at"] or 0)
+
+    if enterprise_row is None:
+        total_acus = sum(float(entry["acus"]) for entry in orgs.values())
+        product_acus = {
+            product: sum(float(entry["acus_by_product"][product]) for entry in orgs.values())
+            for product in PRODUCT_LABELS
+        }
+        product_source = "org_consumption"
+    else:
+        total_acus = float(enterprise_row["total_acus"])
+        product_acus = {
+            "devin": float(enterprise_row["devin_acus"]),
+            "cascade": float(enterprise_row["cascade_acus"]),
+            "terminal": float(enterprise_row["terminal_acus"]),
+            "review": float(enterprise_row["review_acus"]),
+        }
+        product_source = "consumption"
 
     hourly: list[dict[str, Any]] = []
     acus_cum = 0.0
@@ -186,6 +250,11 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         if entry["sessions"] == 0:
             entry["summary"] = ""
         entry["acus"] = round(entry["acus"], 2)
+        entry["session_acus"] = round(entry["session_acus"], 2)
+        entry["acus_by_product"] = {
+            product: round(float(entry["acus_by_product"][product]), 2)
+            for product in PRODUCT_LABELS
+        }
         entry["hourly_acus"] = [round(value, 2) for value in entry["hourly_acus"]]
         entry["merge_rate"] = _rate(entry["prs_merged"], entry["prs_created"])
         entry["acus_per_user"] = round(entry["acus"] / entry["user_count"], 2) if entry["user_count"] else None
@@ -301,7 +370,12 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             "activation_rate": _rate(total_active_users, total_users),
             "acus_per_session": round(total_acus / total_sessions, 2) if total_sessions else 0,
             "acus_per_merged_pr": round(total_acus / total_prs_merged, 2) if total_prs_merged else None,
+            "acus_source": product_source,
         },
+        "product_acus": {
+            product: round(value, 2) for product, value in product_acus.items()
+        },
+        "product_labels": PRODUCT_LABELS,
         "pace": {
             "acus_last_full_hour": previous_hour_acus,
             "acus_current_hour": current_hour_acus,

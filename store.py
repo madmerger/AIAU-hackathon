@@ -24,6 +24,24 @@ CREATE TABLE IF NOT EXISTS org_summaries (
     titles_hash TEXT NOT NULL DEFAULT '',
     updated_at INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS org_consumption (
+    org_id TEXT PRIMARY KEY,
+    total_acus REAL NOT NULL DEFAULT 0,
+    devin_acus REAL NOT NULL DEFAULT 0,
+    cascade_acus REAL NOT NULL DEFAULT 0,
+    terminal_acus REAL NOT NULL DEFAULT 0,
+    review_acus REAL NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS enterprise_consumption (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    total_acus REAL NOT NULL DEFAULT 0,
+    devin_acus REAL NOT NULL DEFAULT 0,
+    cascade_acus REAL NOT NULL DEFAULT 0,
+    terminal_acus REAL NOT NULL DEFAULT 0,
+    review_acus REAL NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY,
     org_id TEXT,

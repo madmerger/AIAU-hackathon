@@ -79,6 +79,7 @@ def main() -> None:
         connection,
         org_refresh_interval=config.org_refresh_interval,
         summary_refresh_interval=config.summary_refresh_interval,
+        consumption_refresh_interval=config.consumption_refresh_interval,
     )
 
     collector.poll()

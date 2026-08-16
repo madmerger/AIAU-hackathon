@@ -70,3 +70,9 @@ class DevinEnterpriseClient:
             "/v3/enterprise/metrics/usage",
             {"time_after": time_after, "time_before": time_before},
         )
+
+    def daily_consumption(self) -> dict[str, Any]:
+        return self._get("/v3/enterprise/consumption/daily")
+
+    def daily_org_consumption(self, org_id: str) -> dict[str, Any]:
+        return self._get(f"/v3/enterprise/consumption/daily/organizations/{org_id}")
