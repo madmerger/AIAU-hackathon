@@ -74,7 +74,12 @@ def main() -> None:
     config = Config.from_env()
     connection = store.connect(config.db_path)
     client = DevinEnterpriseClient(config.api_base, config.api_key)
-    collector = Collector(client, connection, org_refresh_interval=config.org_refresh_interval)
+    collector = Collector(
+        client,
+        connection,
+        org_refresh_interval=config.org_refresh_interval,
+        summary_refresh_interval=config.summary_refresh_interval,
+    )
 
     collector.poll()
     thread = threading.Thread(target=collector.run_forever, args=(config.poll_interval,), daemon=True)

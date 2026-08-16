@@ -18,6 +18,12 @@ CREATE TABLE IF NOT EXISTS org_users (
     user_id TEXT NOT NULL,
     PRIMARY KEY (org_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS org_summaries (
+    org_id TEXT PRIMARY KEY,
+    summary TEXT NOT NULL DEFAULT '',
+    titles_hash TEXT NOT NULL DEFAULT '',
+    updated_at INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY,
     org_id TEXT,

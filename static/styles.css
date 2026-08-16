@@ -102,6 +102,7 @@ main { padding: 18px 22px 40px; display: flex; flex-direction: column; gap: 26px
 .table-wrap { overflow: auto; max-height: 520px; }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 th, td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.org-summary { white-space: normal; min-width: 280px; max-width: 520px; line-height: 1.4; }
 th { position: sticky; top: 0; background: var(--panel-2); color: var(--muted); font-weight: 600; z-index: 1; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tbody tr:hover { background: #24323f; }

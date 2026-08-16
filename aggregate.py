@@ -56,6 +56,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             "org_id": row["org_id"],
             "name": row["name"],
             "user_count": int(row["user_count"]),
+            "summary": row["summary"] or "",
             "acus": 0.0,
             "sessions": 0,
             "active_users": 0,
@@ -64,7 +65,13 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
             "last_activity": None,
             "hourly_acus": [0.0] * bucket_count,
         }
-        for row in connection.execute("SELECT org_id, name, user_count FROM orgs")
+        for row in connection.execute(
+            """
+            SELECT o.org_id, o.name, o.user_count, COALESCE(s.summary, '') AS summary
+            FROM orgs o
+            LEFT JOIN org_summaries s ON s.org_id = o.org_id
+            """
+        )
     }
 
     def org_entry(org_id: str) -> dict[str, Any]:
@@ -73,6 +80,7 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
                 "org_id": org_id,
                 "name": org_id,
                 "user_count": 0,
+                "summary": "",
                 "acus": 0.0,
                 "sessions": 0,
                 "active_users": 0,
@@ -175,6 +183,8 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
     org_rows = sorted(orgs.values(), key=lambda item: item["acus"], reverse=True)
     for rank, entry in enumerate(org_rows, start=1):
         entry["rank"] = rank
+        if entry["sessions"] == 0:
+            entry["summary"] = ""
         entry["acus"] = round(entry["acus"], 2)
         entry["hourly_acus"] = [round(value, 2) for value in entry["hourly_acus"]]
         entry["merge_rate"] = _rate(entry["prs_merged"], entry["prs_created"])
@@ -206,12 +216,6 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         reverse=True,
     )
     active_orgs = [entry for entry in org_rows if entry["sessions"] > 0]
-    idle_orgs = [
-        {"org_id": entry["org_id"], "name": entry["name"], "user_count": entry["user_count"]}
-        for entry in org_rows
-        if entry["sessions"] == 0
-    ]
-
     previous_hour_acus = hourly[-2]["acus"] if len(hourly) >= 2 else 0.0
     current_hour_acus = hourly[-1]["acus"] if hourly else 0.0
     remaining_seconds = max(0, config.hackathon_end - now) if config.hackathon_end else None
@@ -305,7 +309,6 @@ def build_payload(connection: sqlite3.Connection, config: Config, collector_stat
         },
         "hourly": hourly,
         "orgs": org_rows,
-        "idle_orgs": idle_orgs,
         "statuses": statuses,
         "modes": modes,
         "origins": origins,

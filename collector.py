@@ -14,12 +14,15 @@ event timestamp, so hourly series are built from deltas between polls:
 from __future__ import annotations
 
 import logging
+import hashlib
+import os
 import sqlite3
 import threading
 import time
 from typing import Any
 
 from devin_api import DevinApiError, DevinEnterpriseClient
+from summarize import summarize_org
 
 HOUR = 3600
 logger = logging.getLogger(__name__)
@@ -35,10 +38,16 @@ class Collector:
         client: DevinEnterpriseClient,
         connection: sqlite3.Connection,
         org_refresh_interval: int = 600,
+        summary_refresh_interval: int = 600,
+        summary_api_key: str | None = None,
     ) -> None:
         self._client = client
         self._connection = connection
         self._org_refresh_interval = org_refresh_interval
+        self._summary_refresh_interval = max(600, summary_refresh_interval)
+        self._summary_api_key = summary_api_key
+        self._last_summary_refresh = 0.0
+        self._summary_thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._last_org_refresh = 0.0
         self.last_poll_at: int | None = None
@@ -60,6 +69,7 @@ class Collector:
                     (now, len(sessions)),
                 )
                 self._connection.commit()
+                self._schedule_summary_refresh(now)
                 self.last_poll_at = now
                 self.last_error = None
             except DevinApiError as error:
@@ -75,6 +85,78 @@ class Collector:
         while True:
             self.poll()
             time.sleep(interval)
+
+    def _schedule_summary_refresh(self, now: int) -> None:
+        if now - self._last_summary_refresh < self._summary_refresh_interval:
+            return
+        if self._summary_thread and self._summary_thread.is_alive():
+            return
+        self._last_summary_refresh = now
+        self._summary_thread = threading.Thread(
+            target=self._refresh_summaries,
+            name="org-summary-refresh",
+            daemon=True,
+        )
+        self._summary_thread.start()
+
+    def _refresh_summaries(self) -> None:
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT s.org_id, o.name, s.title, s.acus
+                FROM sessions s
+                LEFT JOIN orgs o ON o.org_id = s.org_id
+                WHERE s.title IS NOT NULL AND TRIM(s.title) != ''
+                ORDER BY s.org_id, s.acus DESC
+                """
+            ).fetchall()
+            cached = {
+                row["org_id"]: row
+                for row in self._connection.execute(
+                    "SELECT org_id, titles_hash, updated_at FROM org_summaries"
+                )
+            }
+        grouped: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            item = grouped.setdefault(
+                row["org_id"],
+                {"name": row["name"] or row["org_id"], "titles": [], "seen": set()},
+            )
+            title = str(row["title"])
+            if title not in item["seen"] and len(item["titles"]) < 20:
+                item["seen"].add(title)
+                item["titles"].append(title)
+
+        candidates: list[tuple[str, str, list[str]]] = []
+        for org_id, item in grouped.items():
+            titles = item["titles"]
+            titles_hash = hashlib.sha256("\n".join(titles).encode("utf-8")).hexdigest()
+            previous = cached.get(org_id)
+            if previous and previous["titles_hash"] == titles_hash:
+                continue
+            candidates.append((org_id, titles_hash, titles))
+
+        for org_id, titles_hash, titles in candidates:
+            summary = summarize_org(
+                grouped[org_id]["name"],
+                titles,
+                self._summary_api_key
+                if self._summary_api_key is not None
+                else os.environ.get("OPENAI_API_KEY"),
+            )
+            with self._lock:
+                self._connection.execute(
+                    """
+                    INSERT INTO org_summaries (org_id, summary, titles_hash, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(org_id) DO UPDATE SET
+                        summary = excluded.summary,
+                        titles_hash = excluded.titles_hash,
+                        updated_at = excluded.updated_at
+                    """,
+                    (org_id, summary, titles_hash, int(time.time())),
+                )
+                self._connection.commit()
 
     def _is_first_poll(self) -> bool:
         row = self._connection.execute("SELECT COUNT(*) AS n FROM polls WHERE error IS NULL").fetchone()

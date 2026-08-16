@@ -71,6 +71,7 @@ def main() -> None:
         port=0,
         poll_interval=60,
         org_refresh_interval=600,
+        summary_refresh_interval=600,
         hackathon_start=NOW - 3 * HOUR,
         hackathon_end=NOW + 2 * HOUR,
         max_hours=72,
@@ -81,9 +82,11 @@ def main() -> None:
         session("s2", "org-b", NOW - 1 * HOUR, 4.0, [("pr3", "open")], "shared-1", "cli"),
     ]
     client = FakeClient(sessions)
-    collector = Collector(client, connection)  # type: ignore[arg-type]
+    collector = Collector(client, connection, summary_api_key="")  # type: ignore[arg-type]
 
     collector.poll()
+    if collector._summary_thread:
+        collector._summary_thread.join(timeout=5)
     payload = build_payload(connection, config, {"last_poll_at": NOW, "last_error": None, "poll_interval": 60})
     assert payload["totals"]["acus"] == 14.0, payload["totals"]
     assert payload["totals"]["prs_created"] == 3
@@ -91,6 +94,10 @@ def main() -> None:
     assert payload["totals"]["merge_rate"] == 33.3
     assert payload["totals"]["users"] == 7
     assert payload["totals"]["active_users"] == 1
+    summaries = {entry["name"]: entry["summary"] for entry in payload["orgs"]}
+    assert summaries["Team A"] == "session s1"
+    assert summaries["Team B"] == "session s2"
+    assert summaries["Team C"] == ""
     assert [entry["session_id"] for entry in payload["top_sessions"]] == ["s1", "s2"]
     assert [entry["acus"] for entry in payload["top_sessions"]] == [10.0, 4.0]
     assert [(entry["origin"], entry["acus"]) for entry in payload["origins"][:2]] == [
@@ -101,7 +108,6 @@ def main() -> None:
     assert next(entry for entry in payload["origins"] if entry["origin"] == "desktop")["acus"] == 0.0
     assert payload["totals"]["active_orgs"] == 2
     assert [entry["name"] for entry in payload["orgs"][:2]] == ["Team A", "Team B"]
-    assert payload["idle_orgs"][0]["name"] == "Team C"
 
     past_end_config = Config(
         api_base=config.api_base,
@@ -110,6 +116,7 @@ def main() -> None:
         port=config.port,
         poll_interval=config.poll_interval,
         org_refresh_interval=config.org_refresh_interval,
+        summary_refresh_interval=config.summary_refresh_interval,
         hackathon_start=config.hackathon_start,
         hackathon_end=NOW - HOUR,
         max_hours=config.max_hours,

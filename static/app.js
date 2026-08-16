@@ -224,6 +224,10 @@ function sparkline(values) {
 
 function renderOrgTable(data) {
   const body = document.querySelector("#org-table tbody");
+  const header = document.querySelector("#org-table thead tr");
+  if (!header.querySelector(".summary-header")) {
+    header.insertAdjacentHTML("beforeend", '<th class="summary-header">制作内容</th>');
+  }
   body.innerHTML = data.orgs.map((org) => `
     <tr class="rank-${org.rank}">
       <td class="num">${org.rank}</td>
@@ -237,6 +241,7 @@ function renderOrgTable(data) {
       <td class="num">${org.merge_rate === null ? "-" : fmt(org.merge_rate, "%")}</td>
       <td>${sparkline(org.hourly_acus)}</td>
       <td class="num">${relativeLabel(org.last_activity)}</td>
+      <td class="org-summary">${escapeHtml(org.summary || "")}</td>
     </tr>`).join("");
 }
 
@@ -254,17 +259,6 @@ function renderHeatmap(data) {
     return `<td><div class="hm-cell" style="background:${color}" title="${fmt(v)} ACU"></div></td>`;
   }).join("")}</tr>`).join("");
   document.getElementById("heatmap").innerHTML = `<table>${head}${rows}</table>`;
-}
-
-function renderIdleOrgs(data) {
-  const element = document.getElementById("idle-orgs");
-  if (!data.idle_orgs.length) {
-    element.innerHTML = '<span class="chip ok">全 Org がセッション実行済み</span>';
-    return;
-  }
-  element.innerHTML = data.idle_orgs
-    .map((org) => `<span class="chip">${escapeHtml(org.name)}（${org.user_count}名・0セッション）</span>`)
-    .join("");
 }
 
 function renderSessionFeed(elementId, sessions) {
@@ -313,7 +307,6 @@ function render(data) {
   renderDonuts(data);
   renderOrgTable(data);
   renderHeatmap(data);
-  renderIdleOrgs(data);
   renderFeed(data);
 }
 
